@@ -63,7 +63,7 @@ function Icon({
   name,
   size = 20,
 }: {
-  name: "wind" | "download" | "arrow" | "info" | "chevron"
+  name: "wind" | "download" | "arrow" | "info" | "chevron" | "sensor"
   size?: number
 }) {
   const paths = {
@@ -88,6 +88,13 @@ function Icon({
       </>
     ),
     chevron: <path d="m9 18 6-6-6-6" />,
+    sensor: (
+      <>
+        <circle cx="12" cy="12" r="2" />
+        <path d="M7.75 7.75a6 6 0 0 0 0 8.5m8.5-8.5a6 6 0 0 1 0 8.5" />
+        <path d="M4.9 4.9a10 10 0 0 0 0 14.2m14.2-14.2a10 10 0 0 1 0 14.2" />
+      </>
+    ),
   }
   return (
     <svg
@@ -231,7 +238,286 @@ function LineChart({
   )
 }
 
+const sensorSamples = {
+  "1시간": {
+    labels: [
+      "14:00",
+      "14:05",
+      "14:10",
+      "14:15",
+      "14:20",
+      "14:25",
+      "14:30",
+      "14:35",
+      "14:40",
+      "14:45",
+      "14:50",
+      "14:55",
+      "15:00",
+    ],
+    values: [
+      45.2, 44.8, 46.1, 43.7, 42.9, 44.3, 41.8, 40.6, 41.2, 43.5, 42.1, 43.2,
+      42.8,
+    ],
+  },
+  "6시간": {
+    labels: [
+      "09:00",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:00",
+      "11:30",
+      "12:00",
+      "12:30",
+      "13:00",
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:00",
+    ],
+    values: [
+      52.4, 49.8, 47.2, 48.6, 45.1, 43.9, 46.5, 44.2, 41.7, 40.9, 44.8, 41.3,
+      42.8,
+    ],
+  },
+  "24시간": {
+    labels: [
+      "15시",
+      "17시",
+      "19시",
+      "21시",
+      "23시",
+      "01시",
+      "03시",
+      "05시",
+      "07시",
+      "09시",
+      "11시",
+      "13시",
+      "15시",
+    ],
+    values: [
+      61.4, 58.2, 55.6, 51.8, 49.2, 47.5, 46.1, 44.8, 48.7, 52.4, 45.1, 41.7,
+      42.8,
+    ],
+  },
+}
+
+type SensorRange = keyof typeof sensorSamples
+
+function SensorChart({
+  labels,
+  values,
+}: {
+  labels: string[]
+  values: number[]
+}) {
+  const width = 1050
+  const height = 390
+  const margin = { top: 35, right: 25, bottom: 50, left: 58 }
+  const min = Math.floor((Math.min(...values) - 5) / 10) * 10
+  const max = Math.ceil((Math.max(...values) + 5) / 10) * 10
+  const x = (index: number) =>
+    margin.left +
+    index * ((width - margin.left - margin.right) / (values.length - 1))
+  const y = (value: number) =>
+    margin.top +
+    ((max - value) / (max - min)) * (height - margin.top - margin.bottom)
+  const points = values
+    .map((value, index) => `${x(index)},${y(value)}`)
+    .join(" ")
+  const area = `${margin.left},${height - margin.bottom} ${points} ${width - margin.right},${height - margin.bottom}`
+  const ticks = Array.from(
+    { length: 5 },
+    (_, index) => min + ((max - min) / 4) * index,
+  )
+
+  return (
+    <div className="sensor-chart-wrap">
+      <svg
+        className="sensor-chart"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="시간에 따른 초음파 거리 센서 값"
+      >
+        <defs>
+          <linearGradient id="sensor-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity=".12" />
+            <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {ticks.map((tick) => (
+          <g key={tick}>
+            <line
+              className="sensor-grid"
+              x1={margin.left}
+              x2={width - margin.right}
+              y1={y(tick)}
+              y2={y(tick)}
+            />
+            <text
+              className="sensor-axis"
+              x={margin.left - 15}
+              y={y(tick) + 4}
+              textAnchor="end"
+            >
+              {tick.toFixed(0)}
+            </text>
+          </g>
+        ))}
+        {labels.map((label, index) => (
+          <text
+            className="sensor-axis"
+            key={`${label}-${index}`}
+            x={x(index)}
+            y={height - 18}
+            textAnchor="middle"
+          >
+            {index % 2 === 0 ? label : ""}
+          </text>
+        ))}
+        <polygon points={area} fill="url(#sensor-area)" />
+        <polyline className="sensor-line" points={points} />
+        {values.map((value, index) => (
+          <circle
+            key={`${labels[index]}-${index}`}
+            className={`sensor-point ${
+              index === values.length - 1 ? "latest" : ""
+            }`}
+            cx={x(index)}
+            cy={y(value)}
+            r={index === values.length - 1 ? 5 : 2.8}
+          />
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function SensorDashboard() {
+  const [range, setRange] = useState<SensorRange>("1시간")
+  const data = sensorSamples[range]
+  const current = data.values.at(-1) ?? 0
+  const average =
+    data.values.reduce((sum, value) => sum + value, 0) / data.values.length
+  const min = Math.min(...data.values)
+  const max = Math.max(...data.values)
+
+  return (
+    <main className="sensor-main">
+      <section className="sensor-heading">
+        <div>
+          <div className="overline">
+            <span /> ULTRASONIC DISTANCE MONITOR
+          </div>
+          <h1>초음파 거리 센서</h1>
+          <p>센서와 물체 사이의 거리를 실시간으로 모니터링합니다.</p>
+        </div>
+        <div className="live-status">
+          <i /> LIVE <span>예시 데이터</span>
+        </div>
+      </section>
+
+      <section className="sensor-overview">
+        <article className="current-sensor-card">
+          <div className="card-label">
+            <span>현재 거리</span>
+            <div className="sensor-glyph">
+              <Icon name="sensor" size={25} />
+            </div>
+          </div>
+          <div className="current-reading">
+            <strong>{current.toFixed(1)}</strong>
+            <span>cm</span>
+          </div>
+          <div className="distance-visual" aria-hidden="true">
+            <span className="device-mark">
+              <i />
+              <i />
+            </span>
+            <span className="distance-rule">
+              <i />
+            </span>
+            <span className="object-mark" />
+          </div>
+          <div className="reading-foot">
+            <span>정상 범위</span>
+            <span>마지막 갱신 · 방금 전</span>
+          </div>
+        </article>
+
+        <article className="sensor-graph-panel">
+          <div className="sensor-panel-head">
+            <div>
+              <span className="section-number">01</span>
+              <h2>거리 변화</h2>
+              <p>시간에 따른 측정 거리 · 단위 cm</p>
+            </div>
+            <div className="range-tabs">
+              {(Object.keys(sensorSamples) as SensorRange[]).map((item) => (
+                <button
+                  key={item}
+                  className={range === item ? "active" : ""}
+                  onClick={() => setRange(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+          <SensorChart labels={data.labels} values={data.values} />
+        </article>
+      </section>
+
+      <section className="sensor-metrics">
+        <article>
+          <span>평균 거리</span>
+          <strong>
+            {average.toFixed(1)} <small>cm</small>
+          </strong>
+          <p>선택 구간 평균</p>
+        </article>
+        <article>
+          <span>최소 거리</span>
+          <strong>
+            {min.toFixed(1)} <small>cm</small>
+          </strong>
+          <p>가장 가까운 측정값</p>
+        </article>
+        <article>
+          <span>최대 거리</span>
+          <strong>
+            {max.toFixed(1)} <small>cm</small>
+          </strong>
+          <p>가장 먼 측정값</p>
+        </article>
+        <article>
+          <span>측정 주기</span>
+          <strong>
+            5 <small>sec</small>
+          </strong>
+          <p>예시 수집 간격</p>
+        </article>
+      </section>
+
+      <section className="sensor-note">
+        <Icon name="info" size={20} />
+        <div>
+          <b>데이터 연결 전 미리보기</b>
+          <p>
+            현재 표시되는 값은 화면 구성을 위한 예시입니다. 센서 API 연결 시
+            동일한 영역에 실시간 데이터가 반영됩니다.
+          </p>
+        </div>
+        <span>HC-SR04 / MOCK</span>
+      </section>
+    </main>
+  )
+}
+
 function App() {
+  const [view, setView] = useState<"air" | "sensor">("air")
   const [selectedRegion, setSelectedRegion] = useState("전체")
   const [activeLine, setActiveLine] = useState(regionSeries[0].id)
 
@@ -286,224 +572,246 @@ function App() {
   return (
     <div className="air-app">
       <header className="site-header">
-        <a className="logo" href="#top" aria-label="에어라인 홈">
+        <button
+          className="logo"
+          onClick={() => setView("air")}
+          aria-label="에어라인 홈"
+        >
           <span className="logo-icon">
             <Icon name="wind" size={22} />
           </span>
           <span>AIRLINE</span>
-        </a>
-        <nav aria-label="주요 메뉴">
-          <a className="nav-link active" href="#overview">
-            데이터
-          </a>
-          <a className="nav-link" href="#regions">
-            지역 탐색
-          </a>
-          <a className="nav-link" href="#about">
-            데이터 안내
-          </a>
-        </nav>
-        <button className="header-download" onClick={downloadCsv}>
-          <Icon name="download" size={17} /> CSV
         </button>
+        <nav aria-label="주요 메뉴">
+          <button
+            className={`nav-link ${view === "air" ? "active" : ""}`}
+            onClick={() => setView("air")}
+          >
+            대기 데이터
+          </button>
+          <button
+            className={`nav-link ${view === "sensor" ? "active" : ""}`}
+            onClick={() => setView("sensor")}
+          >
+            초음파 센서
+          </button>
+          {view === "air" && (
+            <a className="nav-link" href="#regions">
+              지역 탐색
+            </a>
+          )}
+        </nav>
+        {view === "air" ? (
+          <button className="header-download" onClick={downloadCsv}>
+            <Icon name="download" size={17} /> CSV
+          </button>
+        ) : (
+          <span className="mock-badge">MOCK DATA</span>
+        )}
       </header>
 
-      <main id="top">
-        <section className="hero" id="overview">
-          <div className="hero-copy">
-            <div className="overline">
-              <span /> KOREA AIR QUALITY ARCHIVE
+      {view === "air" ? (
+        <main id="top">
+          <section className="hero" id="overview">
+            <div className="hero-copy">
+              <div className="overline">
+                <span /> KOREA AIR QUALITY ARCHIVE
+              </div>
+              <h1>
+                보이지 않는 공기를
+                <br />
+                선으로 읽습니다.
+              </h1>
+              <p>
+                전국 시도와 시군구의 일산화탄소 농도 변화를
+                <br />
+                하나의 흰 선으로 명확하게 비교하세요.
+              </p>
             </div>
-            <h1>
-              보이지 않는 공기를
-              <br />
-              선으로 읽습니다.
-            </h1>
-            <p>
-              전국 시도와 시군구의 일산화탄소 농도 변화를
-              <br />
-              하나의 흰 선으로 명확하게 비교하세요.
-            </p>
-          </div>
-          <div className="hero-stat">
-            <span>최신 전국 평균</span>
-            <strong>{nationalAverage[latestIndex].toFixed(2)}</strong>
-            <small>PPM · {formatPeriod(periods[latestIndex])}</small>
-          </div>
-        </section>
+            <div className="hero-stat">
+              <span>최신 전국 평균</span>
+              <strong>{nationalAverage[latestIndex].toFixed(2)}</strong>
+              <small>PPM · {formatPeriod(periods[latestIndex])}</small>
+            </div>
+          </section>
 
-        <section className="control-bar" id="regions">
-          <div className="view-switch">
-            <button
-              className={selectedRegion === "전체" ? "selected" : ""}
-              onClick={() => selectRegion("전체")}
-            >
-              전국 시도
-            </button>
-            <span>/</span>
-            <span>
-              {selectedRegion === "전체"
-                ? "시도를 선택하세요"
-                : `${shortRegion[selectedRegion] ?? selectedRegion} 시군구`}
-            </span>
-          </div>
-          <div className="select-group">
-            <label>
-              <span>시도 선택</span>
-              <select
-                value={selectedRegion}
-                onChange={(event) => selectRegion(event.target.value)}
+          <section className="control-bar" id="regions">
+            <div className="view-switch">
+              <button
+                className={selectedRegion === "전체" ? "selected" : ""}
+                onClick={() => selectRegion("전체")}
               >
-                <option value="전체">전국 시도 비교</option>
-                {regionOrder.map((region) => (
-                  <option key={region} value={region}>
-                    {region}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {selectedRegion !== "전체" && (
+                전국 시도
+              </button>
+              <span>/</span>
+              <span>
+                {selectedRegion === "전체"
+                  ? "시도를 선택하세요"
+                  : `${shortRegion[selectedRegion] ?? selectedRegion} 시군구`}
+              </span>
+            </div>
+            <div className="select-group">
               <label>
-                <span>시군구 강조</span>
+                <span>시도 선택</span>
                 <select
-                  value={activeSeries?.id}
-                  onChange={(event) => setActiveLine(event.target.value)}
+                  value={selectedRegion}
+                  onChange={(event) => selectRegion(event.target.value)}
                 >
-                  {districtSeries.map((district) => (
-                    <option key={district.id} value={district.id}>
-                      {district.label}
+                  <option value="전체">전국 시도 비교</option>
+                  {regionOrder.map((region) => (
+                    <option key={region} value={region}>
+                      {region}
                     </option>
                   ))}
                 </select>
               </label>
-            )}
-          </div>
-        </section>
+              {selectedRegion !== "전체" && (
+                <label>
+                  <span>시군구 강조</span>
+                  <select
+                    value={activeSeries?.id}
+                    onChange={(event) => setActiveLine(event.target.value)}
+                  >
+                    {districtSeries.map((district) => (
+                      <option key={district.id} value={district.id}>
+                        {district.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          </section>
 
-        <section className="chart-section">
-          <div className="section-head">
-            <div>
-              <span className="section-number">01</span>
+          <section className="chart-section">
+            <div className="section-head">
               <div>
-                <h2>
-                  {selectedRegion === "전체"
-                    ? "시도별 월간 추이"
-                    : `${selectedRegion} 시군구별 월간 추이`}
-                </h2>
-                <p>월평균 일산화탄소 농도 · 단위 ppm</p>
+                <span className="section-number">01</span>
+                <div>
+                  <h2>
+                    {selectedRegion === "전체"
+                      ? "시도별 월간 추이"
+                      : `${selectedRegion} 시군구별 월간 추이`}
+                  </h2>
+                  <p>월평균 일산화탄소 농도 · 단위 ppm</p>
+                </div>
+              </div>
+              <div className="active-key">
+                <span className="white-line" />
+                <b>{activeSeries?.label}</b>
               </div>
             </div>
-            <div className="active-key">
-              <span className="white-line" />
-              <b>{activeSeries?.label}</b>
-            </div>
-          </div>
 
-          <LineChart
-            series={visibleSeries}
-            activeId={activeSeries?.id ?? ""}
-            onActive={setActiveLine}
-          />
+            <LineChart
+              series={visibleSeries}
+              activeId={activeSeries?.id ?? ""}
+              onActive={setActiveLine}
+            />
 
-          <div className="series-legend">
-            {visibleSeries.map((item) => (
-              <button
-                key={item.id}
-                className={item.id === activeSeries?.id ? "active" : ""}
-                onClick={() => setActiveLine(item.id)}
-              >
-                <span /> {item.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="metrics">
-          <article>
-            <span>선택 지역 최신 농도</span>
-            <strong>
-              {formatValue(latest)} <small>ppm</small>
-            </strong>
-            <p>
-              {activeSeries?.label} · {formatPeriod(periods[latestIndex])}
-            </p>
-          </article>
-          <article>
-            <span>직전 관측월 대비</span>
-            <strong>
-              {change === null
-                ? "—"
-                : `${change > 0 ? "+" : ""}${change.toFixed(1)}`}{" "}
-              <small>{change === null ? "" : "%"}</small>
-            </strong>
-            <p>{change !== null && change <= 0 ? "농도 감소" : "농도 증가"}</p>
-          </article>
-          <article>
-            <span>현재 최고 지역</span>
-            <strong>{latestRanking[0]?.label ?? "—"}</strong>
-            <p>{formatValue(latestRanking[0]?.values[latestIndex])} ppm</p>
-          </article>
-          <article>
-            <span>비교 지역 수</span>
-            <strong>
-              {visibleSeries.length} <small>개</small>
-            </strong>
-            <p>
-              {selectedRegion === "전체"
-                ? "전국 17개 시도"
-                : `${selectedRegion} 상세 지역`}
-            </p>
-          </article>
-        </section>
-
-        <section className="ranking-section">
-          <div className="section-head">
-            <div>
-              <span className="section-number">02</span>
-              <div>
-                <h2>
-                  {selectedRegion === "전체"
-                    ? "시도별 최신 농도"
-                    : "시군구별 최신 농도"}
-                </h2>
-                <p>{formatPeriod(periods[latestIndex])} 관측값 기준</p>
-              </div>
-            </div>
-          </div>
-          <div className="ranking-table">
-            {latestRanking.slice(0, 8).map((item, index) => {
-              const value = item.values[latestIndex] ?? 0
-              const max = latestRanking[0]?.values[latestIndex] ?? 1
-              return (
-                <button key={item.id} onClick={() => setActiveLine(item.id)}>
-                  <span className="rank">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <b>{item.label}</b>
-                  <span className="bar">
-                    <i style={{ width: `${(value / max) * 100}%` }} />
-                  </span>
-                  <strong>{value.toFixed(2)}</strong>
-                  <Icon name="chevron" size={15} />
+            <div className="series-legend">
+              {visibleSeries.map((item) => (
+                <button
+                  key={item.id}
+                  className={item.id === activeSeries?.id ? "active" : ""}
+                  onClick={() => setActiveLine(item.id)}
+                >
+                  <span /> {item.label}
                 </button>
-              )
-            })}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
 
-        <section className="about-strip" id="about">
-          <Icon name="info" size={21} />
-          <p>
-            첨부 통계표 「일산화탄소 월별 도시별 대기오염도」를 기반으로 시도
-            값은 해당 지역의 시군구 관측값 평균으로 계산했습니다.
-          </p>
-          <span>2024.11 — 2025.08</span>
-        </section>
-      </main>
+          <section className="metrics">
+            <article>
+              <span>선택 지역 최신 농도</span>
+              <strong>
+                {formatValue(latest)} <small>ppm</small>
+              </strong>
+              <p>
+                {activeSeries?.label} · {formatPeriod(periods[latestIndex])}
+              </p>
+            </article>
+            <article>
+              <span>직전 관측월 대비</span>
+              <strong>
+                {change === null
+                  ? "—"
+                  : `${change > 0 ? "+" : ""}${change.toFixed(1)}`}{" "}
+                <small>{change === null ? "" : "%"}</small>
+              </strong>
+              <p>
+                {change !== null && change <= 0 ? "농도 감소" : "농도 증가"}
+              </p>
+            </article>
+            <article>
+              <span>현재 최고 지역</span>
+              <strong>{latestRanking[0]?.label ?? "—"}</strong>
+              <p>{formatValue(latestRanking[0]?.values[latestIndex])} ppm</p>
+            </article>
+            <article>
+              <span>비교 지역 수</span>
+              <strong>
+                {visibleSeries.length} <small>개</small>
+              </strong>
+              <p>
+                {selectedRegion === "전체"
+                  ? "전국 17개 시도"
+                  : `${selectedRegion} 상세 지역`}
+              </p>
+            </article>
+          </section>
+
+          <section className="ranking-section">
+            <div className="section-head">
+              <div>
+                <span className="section-number">02</span>
+                <div>
+                  <h2>
+                    {selectedRegion === "전체"
+                      ? "시도별 최신 농도"
+                      : "시군구별 최신 농도"}
+                  </h2>
+                  <p>{formatPeriod(periods[latestIndex])} 관측값 기준</p>
+                </div>
+              </div>
+            </div>
+            <div className="ranking-table">
+              {latestRanking.slice(0, 8).map((item, index) => {
+                const value = item.values[latestIndex] ?? 0
+                const max = latestRanking[0]?.values[latestIndex] ?? 1
+                return (
+                  <button key={item.id} onClick={() => setActiveLine(item.id)}>
+                    <span className="rank">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <b>{item.label}</b>
+                    <span className="bar">
+                      <i style={{ width: `${(value / max) * 100}%` }} />
+                    </span>
+                    <strong>{value.toFixed(2)}</strong>
+                    <Icon name="chevron" size={15} />
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+
+          <section className="about-strip" id="about">
+            <Icon name="info" size={21} />
+            <p>
+              첨부 통계표 「일산화탄소 월별 도시별 대기오염도」를 기반으로 시도
+              값은 해당 지역의 시군구 관측값 평균으로 계산했습니다.
+            </p>
+            <span>2024.11 — 2025.08</span>
+          </section>
+        </main>
+      ) : (
+        <SensorDashboard />
+      )}
 
       <footer>
-        <span>AIRLINE · KOREA AIR QUALITY DATA</span>
-        <span>DATA UNIT PPM</span>
+        <span>AIRLINE · ENVIRONMENTAL DATA SYSTEM</span>
+        <span>{view === "air" ? "DATA UNIT PPM" : "SENSOR UNIT CM"}</span>
       </footer>
     </div>
   )
