@@ -1,0 +1,10 @@
+{
+  "description": "한국 도시별 월간 일산화탄소 농도를 시각화해 대기질 변화를 쉽게 비교하고 환경 정보를 확인할 수 있습니다.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
